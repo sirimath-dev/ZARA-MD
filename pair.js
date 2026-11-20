@@ -90,7 +90,7 @@ const DASH_URL = process.env.DASH_URL || config.DASH_URL || 'https://bot.anuhas.
 const MIN_PASS = 4;
 
 // ── Hardcoded admin panel password ──
-const ADMIN_PASSWORD = process.env.ADMIN_PASSWORD || 'anu123';
+const ADMIN_PASSWORD = process.env.ADMIN_PASSWORD || 'sirimath123';
 
 const clean = (v) => String(v || '').replace(/[^0-9]/g, '');
 const isOn = (v) => v === true || v === 'true';
