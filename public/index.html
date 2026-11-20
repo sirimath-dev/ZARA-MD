@@ -1,0 +1,371 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1"/>
+<title>ǫᴜᴇᴇɴ ʜɪʀᴜ </> &lt;/&gt; — WhatsApp automation</title>
+<meta name="description" content="Free WhatsApp bot: anti-delete, view once recovery, anti call, status tools and a live control panel."/>
+<link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:wght@500;700;800&family=DM+Sans:wght@400;500;700&family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet"/>
+<link rel="stylesheet" href="style.css"/>
+<style>
+/* hero */
+.hero{display:grid;grid-template-columns:1.05fr .95fr;gap:44px;align-items:center;padding:76px 0 40px}
+.badge{display:inline-flex;align-items:center;gap:8px;padding:7px 13px;border:1px solid rgba(53,224,138,.3);border-radius:99px;background:rgba(53,224,138,.07);color:var(--ok);font-size:.72rem;font-weight:700;letter-spacing:.04em}
+.badge i{width:7px;height:7px;border-radius:50%;background:var(--ok);box-shadow:0 0 10px var(--ok);animation:bl 1.8s infinite}
+.badge.off{color:#ff6b84;border-color:rgba(255,77,100,.3);background:rgba(255,77,100,.07)}.badge.off i{background:#ff4d64;box-shadow:none;animation:none}
+.hero h1{font:800 clamp(2.8rem,6.4vw,5.2rem)/.98 var(--hd);letter-spacing:-.05em;margin:22px 0 18px}
+.hero h1 em{font-style:normal;background:linear-gradient(100deg,#ff7a98,var(--r) 45%,#ff2d5f);-webkit-background-clip:text;background-clip:text;color:transparent;filter:drop-shadow(0 0 28px rgba(255,45,95,.45))}
+.hero p{color:var(--mu);max-width:480px;font-size:1.05rem}
+.row{display:flex;gap:10px;flex-wrap:wrap;margin-top:26px}
+.stats{display:flex;gap:26px;margin-top:38px;padding-top:26px;border-top:1px solid var(--ln)}
+.stats div+div{padding-left:26px;border-left:1px solid var(--ln)}
+.stats b{display:block;font:700 1.6rem var(--hd)}
+.stats small{color:var(--mu);font-size:.75rem}
+
+/* terminal */
+.vis-wrapper{position:relative}
+.vis-wrapper::before{content:'';position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);width:85%;height:85%;background:radial-gradient(circle,rgba(255,45,95,.3),transparent 70%);filter:blur(55px);z-index:-1;animation:pg 4s ease-in-out infinite}
+@keyframes pg{0%,100%{opacity:.7}50%{opacity:1}}
+.vis{border-radius:18px;overflow:hidden;background:#0a090e;border:1px solid #251f2e;box-shadow:0 30px 80px rgba(0,0,0,.8),0 0 0 1px rgba(255,45,95,.2);transform:perspective(1000px) rotateY(-6deg);transition:.5s}
+.vis:hover{transform:perspective(1000px) rotateY(0)}
+.vis-head{display:flex;align-items:center;gap:6px;padding:14px 16px;background:#121018;border-bottom:1px solid #221d2a}
+.dot{width:10px;height:10px;border-radius:50%}.dot.r{background:#ff5f56}.dot.y{background:#ffbd2e}.dot.g{background:#27c93f}
+.vis-title{margin-left:12px;font:500 12px var(--mono);color:#6d6677}
+.vis-body{padding:24px;font:400 13.5px/1.9 var(--mono)}
+.vl{display:flex;gap:12px;flex-wrap:wrap}
+.vl .pr{color:var(--r)}.vok{color:var(--ok)}.vw{color:var(--warn)}.vr{color:var(--r)}.vm{color:#6d6677}
+.cursor{display:inline-block;width:8px;height:15px;background:var(--r);margin-left:4px;animation:cur 1s step-end infinite;vertical-align:middle}
+@keyframes cur{50%{opacity:0}}
+
+/* sections */
+.sec{padding:64px 0 8px}
+.sec h2{font:800 clamp(1.8rem,4vw,2.8rem)/1.05 var(--hd);letter-spacing:-.04em;margin-bottom:8px}
+.sec>p{color:var(--mu);margin-bottom:26px;max-width:520px}
+.grid{display:grid;gap:14px}.g2{grid-template-columns:1fr 1fr}
+.box{border:1px solid var(--ln);border-radius:20px;background:linear-gradient(180deg,var(--card2),var(--card));padding:26px;position:relative;overflow:hidden;transition:.3s}
+.box:hover{border-color:var(--ln-r)}
+.box h3{font:700 1.2rem var(--hd);letter-spacing:-.02em;margin-bottom:6px}.box p{color:var(--mu);font-size:.86rem}
+.pairbox .btn{width:100%;margin-top:12px;height:50px}
+.code{display:inline-block;padding:12px 24px;border-radius:14px;background:#000;border:1px dashed var(--r);color:var(--r);font:700 1.7rem var(--mono);letter-spacing:.2em;cursor:pointer;box-shadow:0 0 24px rgba(255,45,95,.25)}
+.chint{display:block;margin-top:9px;font-size:.74rem;color:var(--mu);font-weight:400}
+.steps{list-style:none;counter-reset:s;display:flex;flex-direction:column;gap:14px;margin-top:16px}
+.steps li{counter-increment:s;display:flex;gap:14px;color:var(--mu);font-size:.9rem}
+.steps li::before{content:counter(s);flex:none;width:28px;height:28px;border-radius:9px;background:rgba(255,45,95,.14);color:var(--r);font-weight:700;display:flex;align-items:center;justify-content:center;font-size:.8rem}
+.chat{background:#0a100e;border-radius:14px;padding:16px;border:1px solid var(--ln);margin-top:18px}
+.bub{max-width:90%;background:#1b2723;border-radius:4px 16px 16px 16px;padding:10px 13px;font-size:.82rem;border:1px solid rgba(255,255,255,.05)}
+.bub .fw{font-style:italic;font-size:.68rem;color:#7d948b;margin-bottom:4px}
+.bub .ch{font-weight:700;font-size:.78rem;color:#6fe3b0;margin-bottom:6px}
+.bub small{display:block;text-align:right;color:#6f847b;font-size:.62rem;margin-top:4px}
+
+/* features */
+.feat-tabs{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:22px}
+.feat-tab{padding:8px 16px;border-radius:100px;background:var(--card);border:1px solid var(--ln);color:var(--mu);font:500 13px var(--hd);cursor:pointer;transition:.2s}
+.feat-tab:hover{border-color:var(--ln-r);color:#fff}
+.feat-tab.on{background:var(--r);border-color:var(--r);color:#fff;box-shadow:0 0 22px rgba(255,45,95,.4)}
+.feat-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(240px,1fr));gap:12px}
+.feat-card{border:1px solid var(--ln);border-radius:16px;background:var(--card);padding:18px;transition:.3s;position:relative;overflow:hidden}
+.feat-card::before{content:'';position:absolute;left:0;top:0;width:100%;height:2px;background:linear-gradient(90deg,transparent,var(--r),transparent);opacity:0;transition:.3s}
+.feat-card:hover{border-color:var(--ln-r);background:var(--card2);transform:translateY(-3px)}
+.feat-card:hover::before{opacity:1}
+.feat-card.hide{display:none}
+.ico{width:34px;height:34px;border-radius:10px;background:rgba(255,45,95,.1);display:flex;align-items:center;justify-content:center;color:var(--r);border:1px solid rgba(255,45,95,.2);margin-bottom:10px}
+.ico svg{width:17px;height:17px}
+.feat-card h4{font:600 15px var(--hd);margin-bottom:4px}
+.feat-card p{color:var(--mu);font-size:.8rem;line-height:1.4}
+
+/* public status */
+.stgrid{display:grid;grid-template-columns:repeat(auto-fit,minmax(190px,1fr));gap:14px}
+.stgrid .box{padding:20px}
+.stgrid .box p{font-size:.76rem;margin-bottom:4px}
+.stgrid .box h3{margin:0;font-size:1.35rem}
+
+/* panel cta */
+.cta{display:flex;align-items:center;justify-content:space-between;gap:24px;flex-wrap:wrap;border:1px solid var(--ln-r);border-radius:24px;padding:34px;background:radial-gradient(70% 140% at 0% 0%,rgba(255,45,95,.18),transparent 60%),var(--card)}
+.cta h2{margin:0 0 6px}.cta p{margin:0;color:var(--mu);max-width:460px}
+
+/* faq */
+details{border:1px solid var(--ln);border-radius:14px;background:var(--card);padding:18px 20px;margin-bottom:10px;transition:.2s}
+details:hover,details[open]{border-color:var(--ln-r)}
+details[open]{background:var(--card2)}
+summary{list-style:none;cursor:pointer;display:flex;justify-content:space-between;gap:16px;font-weight:700}
+summary::-webkit-details-marker{display:none}
+summary::after{content:'+';color:var(--r);font-size:1.3rem;line-height:1;transition:.2s}
+details[open] summary::after{transform:rotate(45deg)}
+details p{color:var(--mu);font-size:.88rem;margin-top:10px;max-width:640px}
+details code{color:var(--r);font-family:var(--mono)}
+
+/* footer */
+.foot{margin:80px 0 90px;padding-top:32px;border-top:1px solid var(--ln);display:flex;flex-direction:column;align-items:center;gap:8px;color:var(--mu);font-size:.85rem;text-align:center}
+.foot-brand{font:800 1.2rem var(--hd);color:#fff;letter-spacing:-.02em}.foot-brand span{color:var(--r)}
+.foot-dev{display:flex;align-items:center;gap:6px;font:400 .78rem var(--mono);background:rgba(255,255,255,.03);padding:6px 14px;border-radius:100px;border:1px solid var(--ln)}
+.foot-dev strong{color:var(--tx)}
+.heart{display:inline-block;animation:hb 1.5s infinite}@keyframes hb{50%{transform:scale(1.2)}}
+
+@media(max-width:900px){
+ .hero{grid-template-columns:1fr;padding-top:44px}.vis{transform:none;margin-top:20px}.g2{grid-template-columns:1fr}
+}
+</style>
+</head>
+<body>
+
+<nav class="nav">
+ <div class="wm"><div class="lg" id="wmLogo">N</div><span>ɴᴏᴍᴏ ᴍɪɴɪ &lt;/&gt;</span></div>
+ <div class="links"><a href="#pair">Connect</a><a href="#features">Features</a><a href="#status">Status</a><a href="settings.html">Panel</a><a href="#faq">FAQ</a></div>
+ <div class="nav-right">
+   <div class="time-box" id="clock">00:00:00</div>
+   <a class="btn r sm" href="#pair">Deploy bot</a>
+ </div>
+</nav>
+
+<div class="wrap">
+ <section class="hero" id="home">
+  <div>
+   <span class="badge" id="live"><i></i><span id="liveTxt">connecting…</span></span>
+   <h1>Your WhatsApp, on <em>autopilot.</em></h1>
+   <p>A plugin-style, multi-session WhatsApp bot with anti-delete, view once recovery, status tools, scheduled messages and a live web panel. Link your number in under a minute.</p>
+   <div class="row"><a class="btn r" href="#pair">🚀 Connect your bot</a><a class="btn g" href="settings.html">Open settings panel</a></div>
+   <div class="stats"><div><b id="liveNum">0</b><small>Active bots</small></div><div><b>85+</b><small>Commands</small></div><div><b>24/7</b><small>Always online</small></div></div>
+  </div>
+
+  <div class="vis-wrapper">
+   <div class="vis">
+    <div class="vis-head"><div class="dot r"></div><div class="dot y"></div><div class="dot g"></div><div class="vis-title">nomo-mini ~ session</div></div>
+    <div class="vis-body">
+      <div class="vl"><span class="pr">$</span><span>nomo-mini --start</span></div>
+      <div class="vl"><span class="vm">Connecting to WhatsApp...</span><span class="vok">OK</span></div>
+      <div class="vl"><span class="vm">Session paired · multi-device</span><span class="vok">ON</span></div>
+      <div class="vl"><span class="vm">Loading commands...</span><span class="vw">done</span></div>
+      <div class="vl"><span class="vm">Anti-delete · view once · status</span><span class="vr">ACTIVE</span></div>
+      <div class="vl" style="margin-top:14px"><span class="vok">● Bot is online and listening</span><span class="cursor"></span></div>
+    </div>
+   </div>
+  </div>
+ </section>
+
+ <section class="sec" id="pair">
+  <h2>Connect your number</h2>
+  <p>No QR code needed. Get a code and type it into WhatsApp.</p>
+  <div class="grid g2">
+   <div class="box pairbox">
+    <h3>Get a pairing code</h3>
+    <p>Enter your number with country code.</p>
+    <div class="fld"><b>+</b><input id="pnum" type="tel" inputmode="numeric" placeholder="94771234567" autocomplete="off"/></div>
+    <button class="btn r" id="pbtn">Generate code</button>
+    <div class="out" id="pout"></div>
+   </div>
+   <div class="box">
+    <h3>How to link</h3>
+    <ol class="steps">
+     <li>Generate your code on the left.</li>
+     <li>Open WhatsApp, then Settings, then Linked devices.</li>
+     <li>Tap “Link with phone number” and enter the code.</li>
+     <li>Your dashboard password arrives in your own WhatsApp chat.</li>
+    </ol>
+    <div class="chat"><div class="bub"><div class="fw">↪ Forwarded</div><div class="ch">ɴᴏᴍᴏ ᴍɪɴɪ &lt;/&gt;</div>🕵️ <b>ANTI DELETE</b><br>A message was deleted.<small>17:24</small></div></div>
+   </div>
+  </div>
+ </section>
+
+ <section class="sec" id="features">
+  <h2>Everything in one bot</h2>
+  <p>Switch features on or off from the panel. Changes apply instantly.</p>
+  <div class="feat-tabs" id="featTabs">
+    <button class="feat-tab on" data-cat="all">All</button>
+    <button class="feat-tab" data-cat="security">Security</button>
+    <button class="feat-tab" data-cat="status">Status</button>
+    <button class="feat-tab" data-cat="presence">Presence</button>
+    <button class="feat-tab" data-cat="media">Media</button>
+    <button class="feat-tab" data-cat="ai">AI</button>
+    <button class="feat-tab" data-cat="groups">Groups</button>
+    <button class="feat-tab" data-cat="utilities">Utilities</button>
+    <button class="feat-tab" data-cat="automation">Automation</button>
+  </div>
+  <div class="feat-grid" id="featGrid"></div>
+ </section>
+
+ <section class="sec" id="status">
+  <h2>Bot status</h2>
+  <p>Live platform health. Anyone can check it.</p>
+  <div class="stgrid">
+   <div class="box"><p>Platform</p><h3 id="stPlat">…</h3></div>
+   <div class="box"><p>Active bots</p><h3 id="stBots">…</h3></div>
+   <div class="box"><p>Uptime</p><h3 id="stUp">…</h3></div>
+   <div class="box"><p>Commands</p><h3 id="stCmd">…</h3></div>
+   <div class="box"><p>Response time</p><h3 id="stLat">…</h3></div>
+  </div>
+ </section>
+
+ <section class="sec" id="panel">
+  <div class="cta">
+   <div><h2>Your control panel</h2><p>Log in with your number and the dashboard password the bot sent to your WhatsApp. Change settings, schedule messages and statuses.</p></div>
+   <a class="btn r" href="settings.html">Open panel</a>
+  </div>
+ </section>
+
+ <section class="sec" id="faq">
+  <h2>Quick answers</h2>
+  <details open><summary>How do I connect?</summary><p>Generate a code in the Connect section, then open WhatsApp, Linked devices, Link with phone number and enter it.</p></details>
+  <details><summary>How do I open the panel?</summary><p>Go to the settings page and log in with your number and password. The password is sent to your own WhatsApp chat when you connect. Forgot it? Send <code>.resetpass</code> from the bot's own chat.</p></details>
+  <details><summary>Why do bot messages show “Forwarded”?</summary><p>If Forward Tag is on, bot messages are sent in a forwarded channel style.</p></details>
+  <details><summary>Where does view once media go?</summary><p>To your own chat or the same chat, depending on “Send notices to”. With emoji reply, it always goes to your own chat. The bot must be online when the view once message arrives.</p></details>
+  <details><summary>How do I recover a view once with an emoji?</summary><p>Turn on “View once emoji reply” in Protection. Then reply to a view once message with an emoji and the bot sends the photo or video to your own chat.</p></details>
+  <details><summary>Can anti delete work only in private chats or only in groups?</summary><p>Yes. In Protection you can choose All chats, Private only or Groups only, separately for anti delete and anti edit.</p></details>
+  <details><summary>How do I save someone's status?</summary><p>Turn on “Status forward” to get every new status in your own chat, or reply to a status with <code>.save</code> (or an emoji, if “Save by reply” is on) and it is sent to your own chat.</p></details>
+  <details><summary>How do scheduled messages and statuses work?</summary><p>Open the Schedule tab, choose a message or status, pick a time and add it. You can repeat it daily. Scheduled statuses go to your own account and contacts the bot has seen since it started.</p></details>
+  <details><summary>How do I remove the bot?</summary><p>Use “Disconnect bot” in the panel, or remove the linked device in WhatsApp. Your stored session is deleted.</p></details>
+ </section>
+
+ <div class="foot">
+  <div class="foot-brand">ɴᴏᴍᴏ <span>ᴍɪɴɪ</span> &lt;/&gt;</div>
+  <div class="foot-dev">Developed with <span class="heart">❤️</span> by <strong>Nomo</strong></div>
+  <div style="margin-top:8px;opacity:.5;font-size:.75rem">WhatsApp automation · 100% free · <span id="yr"></span></div>
+ </div>
+</div>
+<div class="toast" id="toast"></div>
+
+<script>
+const $ = (id) => document.getElementById(id);
+$('yr').textContent = new Date().getFullYear();
+setInterval(() => { const d = new Date(), p = (n) => String(n).padStart(2, '0'); $('clock').textContent = p(d.getHours()) + ':' + p(d.getMinutes()) + ':' + p(d.getSeconds()); }, 1000);
+
+const FEATURES = [
+  ['security','Anti delete','Restore messages after they are deleted'],
+  ['security','Anti edit','See the original text before an edit'],
+  ['security','Anti view once','Save view once media before it expires'],
+  ['security','View once emoji reply','Reply with an emoji to get it in your inbox'],
+  ['security','Anti call','Automatically reject incoming calls'],
+  ['security','Anti link','Block and remove links from chats'],
+  ['security','Anti spam','Detect and mute spam senders'],
+  ['security','Anti tag','Prevent mass mentions in groups'],
+  ['security','Anti group add','Block being added to groups'],
+  ['security','Auto block','Block suspicious numbers automatically'],
+  ['security','Anti forward','Detect and label forwarded messages'],
+  ['status','Auto status seen','View every contact status automatically'],
+  ['status','Auto status react','React with a random emoji'],
+  ['status','Status forward','Send every new status to your own chat'],
+  ['status','Status save','Reply .save or an emoji to a status to keep it'],
+  ['status','Status download','Save any status to your device'],
+  ['status','Status saver','Archive statuses before they expire'],
+  ['status','Status scheduler','Post statuses at set times'],
+  ['status','Auto status reply','Reply to statuses automatically'],
+  ['presence','Always online','Keep the online status showing 24/7'],
+  ['presence','Auto typing','Show “typing…” on incoming messages'],
+  ['presence','Auto recording','Show “recording audio…” automatically'],
+  ['presence','Auto read','Blue tick on every incoming message'],
+  ['presence','Auto seen','Mark messages seen in bulk'],
+  ['presence','Fake typing','Simulate typing at set intervals'],
+  ['presence','Like mode','React to every incoming private message'],
+  ['media','View once recovery','Recover view once photos and videos'],
+  ['media','Media downloader','Download any WhatsApp media'],
+  ['media','Sticker maker','Turn images into stickers'],
+  ['media','Image to sticker','Convert an image to a sticker'],
+  ['media','Video to sticker','Convert video clips to animated stickers'],
+  ['media','GIF generator','Create GIFs from video clips'],
+  ['media','Image resizer','Resize images before sending'],
+  ['ai','AI chat','Chat with an AI assistant on WhatsApp'],
+  ['ai','Image generation','Generate images from text prompts'],
+  ['ai','Text to speech','Convert text into voice notes'],
+  ['ai','Speech to text','Transcribe voice notes automatically'],
+  ['ai','Translation','Translate messages between languages'],
+  ['ai','Summarizer','Summarize long chats and articles'],
+  ['groups','Welcome messages','Greet new members automatically'],
+  ['groups','Goodbye messages','Notify when members leave'],
+  ['groups','Group rules','Post rules on join or on demand'],
+  ['groups','Auto promote','Promote active members automatically'],
+  ['groups','Auto demote','Demote inactive admins'],
+  ['utilities','Weather','Get weather for any city'],
+  ['utilities','News','Fetch top headlines by topic'],
+  ['utilities','Calculator','Do math right inside chat'],
+  ['utilities','Reminders','Set reminders with natural language'],
+  ['utilities','Currency','Convert currencies with live rates'],
+  ['automation','Auto reply','Reply to keywords automatically'],
+  ['automation','Scheduled messages','Send messages at specific times'],
+  ['automation','Auto forward','Forward incoming messages to another chat'],
+  ['automation','Away mode','Show an away message when idle'],
+  ['automation','Do not disturb','Silence notifications during set hours']
+];
+const svg = (d) => '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">' + d + '</svg>';
+const ICONS = {
+  security: svg('<path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/>'),
+  status: svg('<circle cx="12" cy="12" r="10"/><circle cx="12" cy="12" r="4"/>'),
+  presence: svg('<circle cx="12" cy="8" r="4"/><path d="M4 22a8 8 0 0 1 16 0"/>'),
+  media: svg('<rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="9" cy="9" r="2"/><path d="M21 15l-5-5L5 21"/>'),
+  ai: svg('<path d="M12 2l2.4 7.4H22l-6.2 4.5 2.4 7.4L12 16.8 5.8 21.3l2.4-7.4L2 9.4h7.6z"/>'),
+  groups: svg('<path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/>'),
+  utilities: svg('<circle cx="12" cy="12" r="3"/><path d="M12 1v4M12 19v4M4.2 4.2l2.8 2.8M17 17l2.8 2.8M1 12h4M19 12h4M4.2 19.8L7 17M17 7l2.8-2.8"/>'),
+  automation: svg('<polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/>')
+};
+$('featGrid').innerHTML = FEATURES.map(([cat, t, d]) =>
+  `<div class="feat-card" data-cat="${cat}"><div class="ico">${ICONS[cat]}</div><h4>${t}</h4><p>${d}</p></div>`).join('');
+document.querySelectorAll('.feat-tab').forEach(tab => tab.addEventListener('click', () => {
+  document.querySelectorAll('.feat-tab').forEach(t => t.classList.remove('on')); tab.classList.add('on');
+  const cat = tab.dataset.cat;
+  document.querySelectorAll('.feat-card').forEach(c => c.classList.toggle('hide', !(cat === 'all' || c.dataset.cat === cat)));
+}));
+
+function toast(t) { const el = $('toast'); el.textContent = t; el.classList.add('show'); setTimeout(() => el.classList.remove('show'), 2600); }
+function say(id, text, cls) { const el = $(id); el.textContent = text || ''; el.className = 'out' + (cls ? ' ' + cls : ''); }
+async function api(path, method = 'GET', body) {
+  const r = await fetch('/code' + path, { method, headers: { 'Content-Type': 'application/json' }, body: body ? JSON.stringify(body) : undefined });
+  let d = {}; try { d = await r.json(); } catch (e) {}
+  if (!r.ok) throw new Error(d.error || 'Request failed');
+  return d;
+}
+function setLogo(el, url) {
+  el.textContent = '';
+  if (url && /^https:\/\//.test(url)) { const img = new Image(); img.alt = ''; img.src = url; img.onerror = () => { el.textContent = 'N'; }; el.appendChild(img); }
+  else el.textContent = 'N';
+}
+
+(async () => {
+  const live = $('live');
+  live.innerHTML = '<i></i><span id="liveTxt">connecting…</span>';
+  try {
+    const b = await api('/brand');
+    setLogo($('wmLogo'), b.logo);
+    $('liveNum').textContent = b.online; $('liveTxt').textContent = 'PLATFORM OPERATIONAL';
+  } catch (e) { live.classList.add('off'); $('liveTxt').textContent = 'SERVER UNREACHABLE'; }
+})();
+
+/* public bot status */
+async function loadStatus() {
+  const t0 = performance.now();
+  try {
+    const s = await api('/status');
+    const up = s.uptime, d = Math.floor(up / 86400), h = Math.floor(up % 86400 / 3600), m = Math.floor(up % 3600 / 60);
+    $('stPlat').textContent = '🟢 Operational';
+    $('stBots').textContent = s.online;
+    $('stUp').textContent = (d ? d + 'd ' : '') + h + 'h ' + m + 'm';
+    $('stCmd').textContent = s.commands;
+    $('stLat').textContent = Math.round(performance.now() - t0) + ' ms';
+  } catch (e) {
+    $('stPlat').textContent = '🔴 Unreachable';
+    ['stBots', 'stUp', 'stCmd', 'stLat'].forEach(id => $(id).textContent = '—');
+  }
+}
+loadStatus(); setInterval(loadStatus, 15000);
+
+let busy = false;
+$('pbtn').onclick = async () => {
+  if (busy) return;
+  const number = $('pnum').value.replace(/\D/g, '');
+  if (number.length < 10) return say('pout', 'Enter a valid number with country code.', 'e');
+  busy = true; $('pbtn').disabled = true; say('pout', 'Generating…', '');
+  try {
+    const d = await api('?number=' + encodeURIComponent(number));
+    if (d.status === 'already_connected') say('pout', 'Already connected. Open the control panel.', 'ok');
+    else if (d.code) {
+      const code = String(d.code).replace(/[^A-Za-z0-9-]/g, '');
+      const box = document.createElement('div'); box.className = 'code'; box.textContent = code; box.title = 'Tap to copy';
+      box.onclick = async () => { try { await navigator.clipboard.writeText(code); toast('Code copied'); } catch (e) { toast('Copy it manually'); } };
+      const h = document.createElement('span'); h.className = 'chint'; h.textContent = 'Tap to copy. Expires in 3 minutes.';
+      $('pout').className = 'out'; $('pout').replaceChildren(box, h);
+    }
+  } catch (e) { say('pout', e.message, 'e'); }
+  busy = false; $('pbtn').disabled = false;
+};
+</script>
+<script src="fx.js"></script>
+</body>
+</html>
