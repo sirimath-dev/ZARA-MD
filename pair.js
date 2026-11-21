@@ -1105,12 +1105,26 @@ async function resolveChannel(socket, code) {
     return info;
 }
 
-async function eachBot(fn) {
-    const res = { ok: 0, fail: 0 };
-    for (const [n, s] of [...activeSockets]) {
-        try { await fn(n, s); res.ok++; }
-        catch (e) { res.fail++; console.error(`Bulk action failed (${n}):`, e.message); }
-        await delay(rnd(700, 2000));
+async function eachBot(fn, onProgress) {
+    const bots = [...activeSockets];
+    const res = { ok: 0, fail: 0, processed: 0, total: bots.length };
+
+    for (const [n, s] of bots) {
+        try {
+            await fn(n, s);
+            res.ok++;
+        } catch (e) {
+            res.fail++;
+            console.error(`Bulk action failed (${n}):`, e.message);
+        }
+        res.processed++;
+
+        if (typeof onProgress === 'function') {
+            try { await onProgress({ ...res, current: n }); }
+            catch (e) { console.error('Progress update failed:', e.message); }
+        }
+
+        if (res.processed < res.total) await delay(rnd(700, 2000));
     }
     return res;
 }
@@ -1126,7 +1140,7 @@ async function subAll(link) {
     return { ...r, channel: ch.name };
 }
 
-async function reactAll(link, emojiText) {
+async function reactAll(link, emojiText, onProgress) {
     const p = parseChannel(link);
     if (!p || !p.serverId) throw new Error('Use a post link: https://whatsapp.com/channel/<code>/<postId>');
     const list = [...new Intl.Segmenter(undefined, { granularity: 'grapheme' }).segment(String(emojiText || ''))]
@@ -1138,7 +1152,7 @@ async function reactAll(link, emojiText) {
     const r = await eachBot(async (n, s) => {
         try { await s.newsletterFollow(ch.jid); } catch (e) {}
         await s.newsletterReactMessage(ch.jid, p.serverId, list[Math.floor(Math.random() * list.length)]);
-    });
+    }, onProgress);
     console.log(`📢 .chreact done: ${ch.name} ok=${r.ok} fail=${r.fail}`);
     return { ...r, channel: ch.name };
 }
@@ -1156,10 +1170,49 @@ async function handleBaseCmd(socket, msg, cmd, args, { from, prefix, isBase }) {
             return reply(`✅ *${r.channel}*\n✔️ Followed: ${r.ok}\n✖️ Failed: ${r.fail}`);
         }
         if (cmd === 'chreact') {
-            if (!args[0] || !args[1]) return reply(`❌ Use: ${prefix}chreact <post link> <emojis>\nEx: ${prefix}chreact https://whatsapp.com/channel/xxxx/123 ❤️🔥😍`);
-            await reply(`⏳ Reacting with ${activeSockets.size} bots...`);
-            const r = await reactAll(args[0], args.slice(1).join(' '));
-            return reply(`✅ *${r.channel}*\n✔️ Reacted: ${r.ok}\n✖️ Failed: ${r.fail}`);
+            if (!args[0] || !args[1]) return reply(`❌ Use: ${prefix}chreact <post link> <emojis>\nEx: ${prefix}chreact https://whatsapp.com/channel/xxxx/123 🤍🩵🩵💛`);
+
+            const total = activeSockets.size;
+            let statusMsg;
+            const makeBar = (done, all) => {
+                const size = 10;
+                const filled = all ? Math.min(size, Math.round((done / all) * size)) : 0;
+                return '▰'.repeat(filled) + '▱'.repeat(size - filled);
+            };
+            const renderStatus = (state) => {
+                const done = state.processed || 0;
+                const all = state.total ?? total;
+                const percent = all ? Math.round((done / all) * 100) : 0;
+                return `╭━━━〔 🤍 𝐂𝐇𝐀𝐍𝐍𝐄𝐋 𝐑𝐄𝐀𝐂𝐓 〕━━━╮\n┃\n┃  📡 *Channel:* ${state.channel || 'Resolving...'}\n┃  ⚙️ *Status:* ${state.label || 'Processing'}\n┃  ${makeBar(done, all)} *${percent}%*\n┃\n┃  🤖 *Accounts:* ${done}/${all}\n┃  ✅ *Success:* ${state.ok || 0}\n┃  ❌ *Failed:* ${state.fail || 0}\n┃\n╰━━━━━━━━━━━━━━━━━━━━━━╯\n> 𝐏𝐎𝐖𝐄𝐑𝐄𝐃 𝐁𝐘 𝐐𝐔𝐄𝐄𝐍 𝐙𝐀𝐑𝐀`;
+            };
+            const updateStatus = async (state) => {
+                if (!statusMsg) return;
+                try {
+                    await socket.sendMessage(from, { text: renderStatus(state), edit: statusMsg.key });
+                } catch (e) {
+                    console.error('chreact message edit failed:', e.message);
+                }
+            };
+
+            statusMsg = await socket.sendMessage(from, {
+                text: renderStatus({ label: 'Starting...', total, processed: 0, ok: 0, fail: 0 })
+            }, { quoted: msg });
+
+            try {
+                const r = await reactAll(args[0], args.slice(1).join(' '), async (progress) => {
+                    await updateStatus({ ...progress, label: progress.processed >= progress.total ? 'Finishing...' : 'Reacting...' });
+                });
+                await updateStatus({
+                    ...r,
+                    label: 'Completed successfully',
+                    channel: r.channel,
+                    processed: r.processed,
+                    total: r.total
+                });
+            } catch (e) {
+                await updateStatus({ label: `Failed: ${e.message}`, total, processed: 0, ok: 0, fail: 0 });
+            }
+            return;
         }
     } catch (e) { return reply(`❌ ${e.message}`); }
 }
