@@ -239,7 +239,7 @@ function styleOutgoingContent(content) {
 
 /* Owner detection */
 const OWNER = String(config.OWNER_NUMBER || '').replace(/[^0-9]/g, '');
-const OWNER_REACT_EMOJI = '💋';
+const OWNER_REACT_EMOJI = '👑';
 const jidNum = (j) => {
     if (!j) return '';
     const raw = String(j).split('@')[0].split(':')[0];
@@ -1414,9 +1414,16 @@ async function onMessage(socket, n, msg, cache) {
     // ── Plugin reply handlers (movie, ytmp4, anime, facebook, etc.) ──
     if (/^\d+$/.test(text.trim())) {
         const rctx = content.extendedTextMessage?.contextInfo ||
+                     content.listResponseMessage?.contextInfo ||
+                     content.buttonsResponseMessage?.contextInfo ||
+                     content.templateButtonReplyMessage?.contextInfo ||
+                     content.interactiveResponseMessage?.contextInfo ||
                      content.ephemeralMessage?.message?.extendedTextMessage?.contextInfo ||
+                     content.ephemeralMessage?.message?.listResponseMessage?.contextInfo ||
                      content.viewOnceMessage?.message?.extendedTextMessage?.contextInfo ||
-                     content.viewOnceMessageV2?.message?.extendedTextMessage?.contextInfo;
+                     content.viewOnceMessage?.message?.listResponseMessage?.contextInfo ||
+                     content.viewOnceMessageV2?.message?.extendedTextMessage?.contextInfo ||
+                     content.viewOnceMessageV2?.message?.listResponseMessage?.contextInfo;
 
         if (rctx && rctx.stanzaId) {
             const _pfx = String(cfg.PREFIX || config.PREFIX || '.');
