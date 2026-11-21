@@ -7,6 +7,16 @@ module.exports = {
     async execute(socket, msg, args, text, ctx) {
         const { from, config } = ctx;
 
+        // React to command message
+        try {
+            await socket.sendMessage(from, {
+                react: {
+                    text: '🍻',
+                    key: msg.key
+                }
+            });
+        } catch (e) {}
+
         const uptime = Math.floor(process.uptime());
         const h = Math.floor(uptime / 3600);
         const m = Math.floor((uptime % 3600) / 60);
@@ -39,6 +49,10 @@ module.exports = {
             } catch (e) {}
         }
 
-        await socket.sendMessage(from, { text: caption }, { quoted: msg });
+        await socket.sendMessage(
+            from,
+            { text: caption },
+            { quoted: msg }
+        );
     }
 };
