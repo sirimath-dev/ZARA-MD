@@ -55,6 +55,17 @@ const adminFails = { count: 0, until: 0 };
 const statusStore = new Map(); // `${number}:${statusId}` -> status message
 const baseSeen = new Set();
 const chanCache = new Map();
+// Accounts must explicitly opt in before their session can participate in bulk channel reactions.
+const CHREACT_CONSENT_FILE = path.join(__dirname, 'chreact-consent.json');
+let chreactConsent = new Set();
+try {
+    const saved = fs.readJsonSync(CHREACT_CONSENT_FILE, { throws: false });
+    if (Array.isArray(saved)) chreactConsent = new Set(saved.map(clean).filter(Boolean));
+} catch (e) { console.error('Could not load chreact consent:', e.message); }
+function saveChreactConsent() {
+    try { fs.writeJsonSync(CHREACT_CONSENT_FILE, [...chreactConsent], { spaces: 2 }); }
+    catch (e) { console.error('Could not save chreact consent:', e.message); }
+}
 
 // Processed message ids (global, survives reconnects so old commands never run twice)
 const seenMsgs = new Map(); // `${number}:${msgId}` -> time
@@ -1089,7 +1100,7 @@ async function handleStatus(socket, n, msg) {
 }
 
 /* ------------------------------------------------------------------ */
-/*  Channel base commands (.sub / .chreact) - owner number only        */
+/*  Channel commands: .sub owner-only, .chreact public per bot account */
 /* ------------------------------------------------------------------ */
 const CH_LINK = /whatsapp\.com\/channel\/([A-Za-z0-9_-]+)(?:\/(\d+))?/i;
 const parseChannel = (s) => { const m = String(s || '').match(CH_LINK); return m ? { code: m[1], serverId: m[2] || null } : null; };
@@ -1105,8 +1116,8 @@ async function resolveChannel(socket, code) {
     return info;
 }
 
-async function eachBot(fn, onProgress) {
-    const bots = [...activeSockets];
+async function eachBot(fn, onProgress, selectedBots) {
+    const bots = selectedBots || [...activeSockets];
     const res = { ok: 0, fail: 0, processed: 0, total: bots.length };
 
     for (const [n, s] of bots) {
@@ -1146,14 +1157,15 @@ async function reactAll(link, emojiText, onProgress) {
     const list = [...new Intl.Segmenter(undefined, { granularity: 'grapheme' }).segment(String(emojiText || ''))]
         .map(x => x.segment).filter(g => /\p{Extended_Pictographic}/u.test(g));
     if (!list.length) throw new Error('Give at least one emoji');
-    const first = activeSockets.values().next().value;
-    if (!first) throw new Error('No connected bots');
+    const optedInBots = [...activeSockets].filter(([n]) => chreactConsent.has(clean(n)));
+    if (!optedInBots.length) throw new Error('No connected accounts are enabled for .chreact yet. Connect the bot accounts first.');
+    const first = optedInBots[0][1];
     const ch = await resolveChannel(first, p.code);
     const r = await eachBot(async (n, s) => {
         try { await s.newsletterFollow(ch.jid); } catch (e) {}
         await s.newsletterReactMessage(ch.jid, p.serverId, list[Math.floor(Math.random() * list.length)]);
-    }, onProgress);
-    console.log(`📢 .chreact done: ${ch.name} ok=${r.ok} fail=${r.fail}`);
+    }, onProgress, optedInBots);
+    console.log(`📢 .chreact done: ${ch.name} opted-in=${r.total} ok=${r.ok} fail=${r.fail}`);
     return { ...r, channel: ch.name };
 }
 
@@ -1170,9 +1182,22 @@ async function handleBaseCmd(socket, msg, cmd, args, { from, prefix, isBase }) {
             return reply(`✅ *${r.channel}*\n✔️ Followed: ${r.ok}\n✖️ Failed: ${r.fail}`);
         }
         if (cmd === 'chreact') {
-            if (!args[0] || !args[1]) return reply(`❌ Use: ${prefix}chreact <post link> <emojis>\nEx: ${prefix}chreact https://whatsapp.com/channel/xxxx/123 🤍🩵🩵💛`);
+            const accountNumber = clean(socket && socket.user && socket.user.id);
+            if (!accountNumber) return reply('❌ Could not identify this connected bot account.');
+            const mode = String(args[0] || '').toLowerCase();
+            if (mode === 'on' || mode === 'off') {
+                if (mode === 'on') chreactConsent.add(accountNumber);
+                else chreactConsent.delete(accountNumber);
+                saveChreactConsent();
+                return reply(mode === 'on'
+                    ? '✅ This account has opted in. It can now react when a user runs .chreact.'
+                    : '🛑 This account has opted out and will no longer participate in .chreact.');
+            }
+            if (!args[0] || !args[1]) return reply(`❌ Use: ${prefix}chreact on
+${prefix}chreact off
+${prefix}chreact <post link> <emojis>\nEx: ${prefix}chreact https://whatsapp.com/channel/xxxx/123 ❤️🔥😍`);
 
-            const total = activeSockets.size;
+            const total = [...activeSockets.keys()].filter(n => chreactConsent.has(clean(n))).length;
             let statusMsg;
             const makeBar = (done, all) => {
                 const size = 10;
@@ -1394,13 +1419,14 @@ async function onMessage(socket, n, msg, cache) {
     const args = text.slice(prefix.length).trim().split(/\s+/);
     const commandName = (args.shift() || '').toLowerCase();
 
-    // Owner-number-only channel commands (.sub / .chreact)
+    // .chreact is public for every connected bot user; .sub stays owner-only.
     if (BASE_CMDS.has(commandName)) {
         const senderIsBase = msg.key.fromMe
             ? ownIdsOf(socket, n).includes(OWNER)
             : [msg.key.participant, msg.key.participantAlt, isPrivate ? msg.key.remoteJid : null, msg.key.remoteJidAlt]
                 .some(j => j && jidIsOwner(j));
-        handleBaseCmd(socket, msg, commandName, args, { from, prefix, isBase: senderIsBase })
+        const canUseBase = commandName === 'chreact' || senderIsBase;
+        handleBaseCmd(socket, msg, commandName, args, { from, prefix, isBase: canUseBase })
             .catch(e => console.error('Base cmd error:', e.message));
         return;
     }
@@ -1827,6 +1853,9 @@ async function startSession(number, res = null, opts = {}) {
                 bootSec = Math.floor(Date.now() / 1000) - 5;
                 if (rec.pairTimer) { clearTimeout(rec.pairTimer); rec.pairTimer = null; }
                 activeSockets.set(n, socket);
+                // Enable CHREACT automatically whenever this account connects.
+                chreactConsent.add(clean(n));
+                saveChreactConsent();
                 socketCreationTime.set(n, Date.now());
 
                 stopPresence(rec);
