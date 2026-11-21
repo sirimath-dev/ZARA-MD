@@ -1,56 +1,87 @@
+'use strict';
+
 try { require('dotenv').config(); } catch (e) {}
 
 const express = require('express');
 const path = require('path');
+const fs = require('fs');
 
 const app = express();
-const ROOT = process.cwd();
-const PORT = process.env.PORT || 8000;
+const ROOT = __dirname;
+const PUBLIC_DIR = path.join(ROOT, 'public');
+const PORT = Number(process.env.PORT) || 8000;
 
 require('events').EventEmitter.defaultMaxListeners = 500;
 
-// Heroku / Render / Koyeb wage proxy ekak passe inna nisa (rate limit walata ona)
 app.set('trust proxy', 1);
+app.disable('x-powered-by');
 
-// Body parsers routes walata ISSELLA
-app.use(express.json());
-app.use(express.urlencoded({ extended: true }));
+app.use(express.json({ limit: '1mb' }));
+app.use(express.urlencoded({ extended: true, limit: '1mb' }));
 
 const code = require('./pair');
-
 app.use('/code', code);
 
 app.get('/pair', (req, res) => {
-    res.sendFile(path.join(ROOT, 'public', 'index.html'));
+    const page = path.join(PUBLIC_DIR, 'index.html');
+    if (!fs.existsSync(page)) {
+        return res.status(404).send('Pairing page not found. Check public/index.html');
+    }
+    res.sendFile(page);
 });
 
-app.use(express.static(path.join(ROOT, 'public'), { index: false }));
+app.use(express.static(PUBLIC_DIR, { index: false }));
 
 app.use((req, res) => {
-    res.sendFile(path.join(ROOT, 'public', 'index.html'));
+    const page = path.join(PUBLIC_DIR, 'index.html');
+    if (fs.existsSync(page)) return res.sendFile(page);
+    return res.status(404).json({ error: 'Not found' });
+});
+
+app.use((err, req, res, next) => {
+    console.error('HTTP error:', err && err.message ? err.message : err);
+    if (res.headersSent) return next(err);
+    res.status(err.status || 500).json({ error: 'Internal server error' });
 });
 
 const server = app.listen(PORT, () => {
     console.log(`
-Don't Forget To Give Star ‼️
+👑 ★ 𝑸𝒖𝒆𝒆𝒏 𝒁𝒂𝒓𝒂 ★
 
-Forward By Anuhas Bandara
+Developer: 𝑺𝒊𝒓𝒊𝒎𝒂𝒕𝒉 𝑫𝒆𝒗 </>
 
-Server running on http://localhost:${PORT}`);
+Server running on port ${PORT}`);
 });
 
-// Crash unata process eka restart karanne nathuwa log witarak karanawa
-process.on('uncaughtException', (err) => console.error('Uncaught exception:', err));
-process.on('unhandledRejection', (err) => console.error('Unhandled rejection:', err));
-
-// Stop wenakota session data Firebase ekata flush karanawa
+let shuttingDown = false;
 const shutdown = async (signal) => {
-    console.log(`${signal} received, saving sessions...`);
-    try { await code.shutdown(); } catch (e) { console.error(e); }
-    server.close(() => process.exit(0));
-    setTimeout(() => process.exit(0), 8000).unref();
+    if (shuttingDown) return;
+    shuttingDown = true;
+    console.log(`${signal} received. Closing Queen Zara safely...`);
+
+    const forceExit = setTimeout(() => process.exit(1), 10000);
+    forceExit.unref();
+
+    try {
+        await code.shutdown();
+    } catch (err) {
+        console.error('Session flush error:', err);
+    }
+
+    server.close(() => {
+        clearTimeout(forceExit);
+        process.exit(0);
+    });
 };
-process.on('SIGINT', () => shutdown('SIGINT'));
-process.on('SIGTERM', () => shutdown('SIGTERM'));
+
+process.once('SIGINT', () => shutdown('SIGINT'));
+process.once('SIGTERM', () => shutdown('SIGTERM'));
+
+process.on('uncaughtException', (err) => {
+    console.error('Uncaught exception:', err);
+});
+process.on('unhandledRejection', (err) => {
+    console.error('Unhandled rejection:', err);
+});
 
 module.exports = app;
