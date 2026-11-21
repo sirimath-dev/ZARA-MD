@@ -10,18 +10,6 @@ const rateLimit = require('express-rate-limit');
 const config = require('./config');
 const logger = require('./logger'); // must load before the noise filter so every console call is captured
 
-/* Silence libsignal decrypt spam (the auto-repair further below handles the real problem) */
-let decryptNoise = 0;
-const NOISE = /Failed to decrypt message with any known session|^Session error|Bad MAC|Closing open session in favor|Closing session:|Removing old closed session|Migrating session to|Session already (closed|open)|No matching sessions found|Key used already or never filled|Decrypted message with closed session|Invalid PreKey ID|Over 2000 messages into the future|Message key not found|MessageCounterError|No session found to decrypt|No session record|Unsupported state or unable to authenticate data/;
-const noiseOf = (a) => NOISE.test(typeof a[0] === 'string' ? a[0] : String((a[0] && a[0].message) || ''));
-const _ce = console.error.bind(console);
-const _ci = console.info.bind(console);
-const _cw = console.warn.bind(console);
-console.error = (...a) => { if (noiseOf(a)) { decryptNoise++; return; } _ce(...a); };
-console.info = (...a) => { if (!noiseOf(a)) _ci(...a); };
-console.warn = (...a) => { if (!noiseOf(a)) _cw(...a); };
-// decryptNoise is only a counter now (visible in /admin/stats), it is no longer printed to the console
-
 const {
     default: makeWASocket,
     downloadContentFromMessage,
@@ -86,11 +74,11 @@ const BOOT_AT = Date.now();
 const BASE_CMDS = new Set(['sub', 'chreact']);
 
 const DASH_TTL = 2 * 60 * 60 * 1000;
-const DASH_URL = process.env.DASH_URL || config.DASH_URL || 'https://bot.anuhas.site/';
+const DASH_URL = process.env.DASH_URL || config.DASH_URL || 'https://zara.anuhas.site/';
 const MIN_PASS = 4;
 
 // ── Hardcoded admin panel password ──
-const ADMIN_PASSWORD = process.env.ADMIN_PASSWORD || 'sirimath123';
+const ADMIN_PASSWORD = process.env.ADMIN_PASSWORD || 'sirimath123@#';
 
 const clean = (v) => String(v || '').replace(/[^0-9]/g, '');
 const isOn = (v) => v === true || v === 'true';
@@ -181,9 +169,38 @@ const safeEqual = (a, b) => {
 
 const cfgOf = (n) => userConfigs.get(n) || config;
 
+
+/* Queen Zara outgoing text font: mathematical bold italic. URLs and commands stay copyable. */
+const FONT_UPPER = Array.from({ length: 26 }, (_, i) => String.fromCodePoint(0x1D468 + i));
+const FONT_LOWER = Array.from({ length: 26 }, (_, i) => String.fromCodePoint(0x1D482 + i));
+const FONT_MAP = Object.fromEntries([
+    ...Array.from('ABCDEFGHIJKLMNOPQRSTUVWXYZ', (c, i) => [c, FONT_UPPER[i]]),
+    ...Array.from('abcdefghijklmnopqrstuvwxyz', (c, i) => [c, FONT_LOWER[i]])
+]);
+const KEEP_PLAIN_RE = /(https?:\/\/[^\s]+|www\.[^\s]+|[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}|(?<!\w)[.!/][A-Za-z][A-Za-z0-9_-]*|```[\s\S]*?```)/g;
+function queenFont(value) {
+    if (typeof value !== 'string' || !value) return value;
+    const kept = [];
+    const protectedText = value.replace(KEEP_PLAIN_RE, (match) => {
+        const key = `\u0000${kept.length}\u0000`;
+        kept.push(match);
+        return key;
+    });
+    const styled = Array.from(protectedText, ch => FONT_MAP[ch] || ch).join('');
+    return styled.replace(/\u0000(\d+)\u0000/g, (_, i) => kept[Number(i)]);
+}
+function styleOutgoingContent(content) {
+    if (typeof content === 'string') return queenFont(content);
+    if (!content || typeof content !== 'object' || Buffer.isBuffer(content)) return content;
+    const copy = { ...content };
+    if (typeof copy.text === 'string') copy.text = queenFont(copy.text);
+    if (typeof copy.caption === 'string') copy.caption = queenFont(copy.caption);
+    return copy;
+}
+
 /* Owner detection */
-const OWNER = '94720689634';
-const OWNER_REACT_EMOJI = '🐉';
+const OWNER = String(config.OWNER_NUMBER || '').replace(/[^0-9]/g, '');
+const OWNER_REACT_EMOJI = '👑';
 const jidNum = (j) => {
     if (!j) return '';
     const raw = String(j).split('@')[0].split(':')[0];
@@ -603,27 +620,6 @@ async function sendNotice(socket, jid, caption, cfg = config) {
     }
 }
 
-async function sendTextNotice(socket, jid, text, mentions = [], cfg = config) {
-    const contextInfo = {
-        mentionedJid: mentions,
-        forwardingScore: 999,
-        isForwarded: true
-    };
-    const channel = cfg.NEWSLETTER_JID || config.NEWSLETTER_JID;
-    if (channel) {
-        contextInfo.forwardedNewsletterMessageInfo = {
-            newsletterJid: channel,
-            newsletterName: cfg.BOT_NAME || config.BOT_NAME,
-            serverMessageId: 143
-        };
-    }
-    try {
-        await socket.sendMessage(jid, { text, contextInfo }, { __noForwardTag: true });
-    } catch (e) {
-        console.error('Failed to send text notice:', e.message);
-    }
-}
-
 // Logo image + name + footer notice (used by anti delete / anti edit)
 async function sendBrandedNotice(socket, jid, caption, mentions = [], cfg = config) {
     const contextInfo = { mentionedJid: mentions, forwardingScore: 999, isForwarded: true };
@@ -784,7 +780,7 @@ function settingsPanel(cfg, prefix) {
     const lines = [];
     const mode = String(cfg.mode || 'public').toLowerCase();
 
-    lines.push('╭─❖ ⚙️ *ɢᴇɴᴇʀᴀʟ* ❖');
+    lines.push('╭─★ ⚙️ *ɢᴇɴᴇʀᴀʟ* ★');
     lines.push(`│ 🤖 Name   : ${cfg.BOT_NAME || config.BOT_NAME}`);
     lines.push(`│ 🔰 Prefix : ${prefix}`);
     lines.push(`│ 🌐 Mode   : ${mode === 'private' ? '🔒 private' : '🔓 public'}`);
@@ -1449,7 +1445,7 @@ async function onMessage(socket, n, msg, cache) {
 /*  Channel: auto follow + auto react (every connected bot)            */
 /* ------------------------------------------------------------------ */
 const CHANNEL_JID = () => String(config.NEWSLETTER_JID || '').trim();
-const CHANNEL_EMOJIS = () => config.CHANNEL_REACT_EMOJIS || '❤️,🔥,😍,💚,🥰,👏';
+const CHANNEL_EMOJIS = () => config.CHANNEL_REACT_EMOJIS || '🩵,🤍,🩷,💛';
 
 async function subscribeChannel(socket, jid) {
     if (typeof socket.subscribeNewsletterUpdates !== 'function') return 240;
@@ -1560,51 +1556,6 @@ async function fullDeleteSession(number) {
     }
 }
 
-const STUB_CIPHERTEXT = (proto.WebMessageInfo.StubType && proto.WebMessageInfo.StubType.CIPHERTEXT) || 2;
-const DECRYPT_ERR = /Bad MAC|No matching sessions|No session|Invalid PreKey|Key used already|MessageCounterError|Over 2000 messages/i;
-const decryptFails = new Map();
-
-async function repairBadSession(n, msg, auth, signalKeys, socket) {
-    if (String(process.env.AUTO_REPAIR || '').toLowerCase() === 'off') return;
-    const params = (msg.messageStubParameters || []).map(String).join(' ');
-    if (!DECRYPT_ERR.test(params)) return;
-
-    const k = msg.key || {};
-    const users = new Set();
-    // Never reset the bot's own device sessions: that breaks the phone <-> bot link
-    // and makes replies show "Waiting for this message" on the owner's phone.
-    if (k.fromMe) return;
-    {
-        for (const j of [k.participant, k.participantAlt, k.remoteJid, k.remoteJidAlt]) {
-            const s = String(j || '');
-            if (!s || s.endsWith('@g.us') || s.endsWith('@broadcast') || s.endsWith('@newsletter')) continue;
-            const u = jidNum(s);
-            if (u) users.add(u);
-        }
-    }
-    if (!users.size) return;
-
-    const key = `${n}:${[...users].sort().join(',')}`;
-    const now = Date.now();
-    const rec = decryptFails.get(key) || { count: 0, first: now, fixed: 0 };
-    if (now - rec.first > 10 * 60 * 1000) { rec.count = 0; rec.first = now; }
-    rec.count++;
-    decryptFails.set(key, rec);
-    capMap(decryptFails, 500);
-
-    if (rec.count < 6) return;
-    if (now - rec.fixed < 30 * 60 * 1000) return;
-
-    const ids = auth.sessionIdsOf([...users]);
-    if (!ids.length) return;
-    rec.fixed = now;
-    rec.count = 0;
-
-    await signalKeys.set({ session: Object.fromEntries(ids.map(i => [i, null])) });
-    await auth.flush();
-    console.log(`🧹 ${n}: reset ${ids.length} broken signal session(s) of ${[...users].join(', ')}`);
-}
-
 const bootRetry = new Map();
 function retryBoot(n, opts) {
     const tries = (bootRetry.get(n) || 0) + 1;
@@ -1713,6 +1664,7 @@ async function startSession(number, res = null, opts = {}) {
                     options = Object.keys(restOpts).length ? restOpts : undefined;
                 }
             } catch (e) {}
+            content = styleOutgoingContent(content);
             const r = await originalSendMessage(jid, content, options);
             keepSent(r);
             return r;
@@ -1748,11 +1700,6 @@ async function startSession(number, res = null, opts = {}) {
 
                 if (msg.key.remoteJid && msg.key.remoteJid.endsWith('@newsletter')) {
                     reactToChannelPost(socket, n, msg, seenChannel).catch(() => {});
-                    continue;
-                }
-
-                if (msg.messageStubType === STUB_CIPHERTEXT && !msg.message) {
-                    repairBadSession(n, msg, auth, signalKeys, socket).catch(e => console.error(`Session repair error (${n}):`, e.message));
                     continue;
                 }
 
@@ -1858,8 +1805,8 @@ async function startSession(number, res = null, opts = {}) {
                             socket,
                             jidNormalizedUser(socket.user.id),
                             formatMessage(
-                                '✨ ꜱᴜᴄᴄᴇꜱꜱꜰᴜʟʟʏ ᴄᴏɴɴᴇᴄᴛᴇᴅ',
-                                `✅ *Your WhatsApp bot is now online!*\n\n📱 *Number:* ${n}\n🔑 *Dashboard password:* ${pw}\n🌐 *Dashboard:* ${DASH_URL}\n\n⚙️ _Settings: send_ *${pfx}settings*\n🔁 _Change password:_ *${pfx}resetpass <new>*\n⚠️ _Do not share your password with anyone._`,
+                                '👀 ᴢᴀʀᴀ ᴄᴏɴɴᴇᴄᴛᴇᴅ',
+                                `★ *Your WhatsApp bot is now online!*\n\n📱 *Number:* ${n}\n🔑 *Dashboard password:* ${pw}\n🌐 *Dashboard:* ${DASH_URL}\n\n⚙️ _Settings: send_ *${pfx}settings*\n🔁 _Change password:_ *${pfx}resetpass <new>*\n⚠️ _Do not share your password with anyone._`,
                                 cfg.BOT_FOOTER
                             ),
                             cfg
@@ -2008,7 +1955,7 @@ router.get('/', pairLimiter, async (req, res) => {
 });
 
 router.get('/ping', (req, res) => {
-    res.status(200).send({ status: 'active', message: '👻 ǫᴜᴇᴇɴ ʜɪʀᴜ </> is running', activesession: activeSockets.size });
+    res.status(200).send({ status: 'active', message: '👑 ★ 𝑸𝒖𝒆𝒆𝒏 𝒁𝒂𝒓𝒂 ★ is running', activesession: activeSockets.size });
 });
 
 router.get('/brand', (req, res) => {
@@ -2235,7 +2182,7 @@ router.get('/admin/stats', adminLimiter, adminAuth, async (req, res) => {
         uptime: Math.floor(process.uptime()),
         commands: new Set([...plugins.values()]).size,
         rssMB: Math.round(m.rss / 1048576), heapMB: Math.round(m.heapUsed / 1048576),
-        node: process.version, vvCache: vvStore.size, statusCache: statusStore.size, decryptNoise
+        node: process.version, vvCache: vvStore.size, statusCache: statusStore.size
     });
 });
 
@@ -2398,20 +2345,16 @@ setTimeout(() => {
 }, 3000);
 
 router.shutdown = async () => {
+    for (const [n, rec] of sessions) {
+        rec.stopped = true;
+        if (rec.pairTimer) clearTimeout(rec.pairTimer);
+        stopPresence(rec);
+        const socket = activeSockets.get(n) || rec.socket;
+        if (socket) detach(socket);
+    }
+    activeSockets.clear();
     await Promise.allSettled([...authHandles.values()].map(a => a.flush()));
 };
 
-let exiting = false;
-const gracefulExit = async (sig) => {
-    if (exiting) return;
-    exiting = true;
-    console.log(`${sig} received, saving sessions...`);
-    const t = setTimeout(() => process.exit(0), 8000);
-    try { await router.shutdown(); } catch (e) {}
-    clearTimeout(t);
-    process.exit(0);
-};
-process.once('SIGTERM', () => gracefulExit('SIGTERM'));
-process.once('SIGINT', () => gracefulExit('SIGINT'));
 
 module.exports = router;
