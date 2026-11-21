@@ -99,15 +99,6 @@ function scanPlugins() {
 
 function buildMainMenu(prefix) {
     const lines = [
-        `╭━━━〔 👑 ${f('Queen Zara')} 👑 〕━━━╮`,
-        `│ ✨ ${f('Welcome to the menu!')}`,
-        `╰━━━━━━━━━━━━━━━━━━╯`,
-        '',
-        `📌 *${f('Prefix')}*`,
-        `\`${prefix}\``,
-        '',
-        `🟢 *${f('Status')}*  ·  \`${f('Online')}\``,
-        '',
         `📚 *${f('Main Menu')}*`,
         ''
     ];
@@ -123,7 +114,7 @@ function buildMainMenu(prefix) {
         `💡 \`${f('Reply with a menu number.') }\``,
         ``,
         `╭──────────────────╮`,
-        `      💠 ${f(FOOTER)} 💠`,
+        `        💠 ${f(FOOTER)} 💠`,
         `╰──────────────────╯`
     );
     return lines.join('\n');
