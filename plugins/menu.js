@@ -3,7 +3,7 @@ const path = require('path');
 const config = require('../config');
 
 const DEFAULT_PREFIX = config.PREFIX || '.';
-const MENU_IMAGE = 'https://file.dnuz.top/9yp84j.jpg';
+const MENU_IMAGE = 'https://file.dnuz.top/9dg7a1.jpg';
 const FOOTER = 'Sirimath';
 const SESSION_TTL = 10 * 60 * 1000;
 const sessions = new Map();
@@ -206,16 +206,9 @@ function sessionKey(ctx) {
 
 async function sendMainMenu(sock, from, quotedMsg, settings, key) {
     const opts = quotedMsg ? { quoted: quotedMsg } : {};
-
-    // First message: the small Queen Zara logo.
-    try {
-        await sock.sendMessage(from, { image: { url: settings.logo } }, opts);
-    } catch (e) {
-        console.error('[QUEEN ZARA LOGO]', e.message);
-    }
-
-    // Second message: the requested menu picture with the menu caption.
     let sent;
+
+    // Send only the requested Queen Zara logo with the main menu caption.
     try {
         sent = await sock.sendMessage(from, {
             image: { url: MENU_IMAGE },
@@ -259,7 +252,7 @@ module.exports = {
     alias: ['help'],
     desc: 'Queen Zara Interactive Menu',
     category: 'main',
-    reactEmoji: '💋',
+    reactEmoji: '🍻',
 
     async execute(sock, msg, args, text, ctx = {}) {
         const from = ctx.from || msg.key.remoteJid;
@@ -267,7 +260,6 @@ module.exports = {
         const cfg = ctx.config || {};
         const settings = {
             prefix: String(ctx.prefix || cfg.PREFIX || DEFAULT_PREFIX),
-            logo: String(cfg.RCD_IMAGE_PATH || DEFAULT_LOGO)
         };
         const key = sessionKey({ ...ctx, from, sender });
         const input = (args || []).join(' ').trim().toLowerCase();
@@ -315,7 +307,6 @@ module.exports = {
         const cfg = ctx.config || {};
         const settings = {
             prefix: String(ctx.prefix || cfg.PREFIX || DEFAULT_PREFIX),
-            logo: String(cfg.RCD_IMAGE_PATH || DEFAULT_LOGO)
         };
         const plugins = scanPlugins();
 
