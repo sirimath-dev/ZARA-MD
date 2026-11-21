@@ -1,152 +1,98 @@
-const config = require('../config');
-const { generateWAMessageFromContent, prepareWAMessageMedia } = require('@whiskeysockets/baileys');
+'use strict';
 
-const ALIVE_TITLE = 'ɴᴏᴍᴏ ᴍᴅ </> ᴀʟɪᴠᴇ';
+const os = require('os');
+const moment = require('moment-timezone');
 
-/* Small caps helper */
-const SC = {
-    a: 'ᴀ', b: 'ʙ', c: 'ᴄ', d: 'ᴅ', e: 'ᴇ', f: 'ꜰ', g: 'ɢ', h: 'ʜ', i: 'ɪ', j: 'ᴊ', k: 'ᴋ', l: 'ʟ', m: 'ᴍ',
-    n: 'ɴ', o: 'ᴏ', p: 'ᴘ', q: 'ǫ', r: 'ʀ', s: 's', t: 'ᴛ', u: 'ᴜ', v: 'ᴠ', w: 'ᴡ', x: 'x', y: 'ʏ', z: 'ᴢ'
-};
-const sc = (str) => String(str).toLowerCase().replace(/[a-z]/g, (ch) => SC[ch]);
-
-function fmtUptime(sec) {
-    const d = Math.floor(sec / 86400);
-    const h = Math.floor((sec % 86400) / 3600);
-    const m = Math.floor((sec % 3600) / 60);
-    const s = Math.floor(sec % 60);
-    const parts = [];
-    if (d) parts.push(`${d}ᴅ`);
-    parts.push(`${String(h).padStart(2, '0')}ʜ`);
-    parts.push(`${String(m).padStart(2, '0')}ᴍ`);
-    parts.push(`${String(s).padStart(2, '0')}s`);
-    return parts.join(' ');
-}
-
-function buildAlive(user, prefix) {
-    const ram = (process.memoryUsage().rss / 1024 / 1024).toFixed(2);
-    return [
-        '╭─〔 *ʙᴏᴛ ꜱᴛᴀᴛᴜꜱ* 〕─┈⊷',
-        `│ 👋 *ʜɪ:* ${user}`,
-        `│ ⚡ *ʙᴏᴛ:* ${config.BOT_NAME}`,
-        `│ 👑 *ᴏᴡɴᴇʀ:* +${config.OWNER_NUMBER}`,
-        `│ 🔣 *ᴘʀᴇꜰɪx:* ${prefix}`,
-        `│ 💻 *ʀᴀᴍ:* ${ram} ᴍʙ`,
-        `│ ⏱️ *ᴜᴘᴛɪᴍᴇ:* ${fmtUptime(process.uptime())}`,
-        `│ ✅ *ꜱᴛᴀᴛᴜꜱ:* ᴀᴄᴛɪᴠᴇ & ʀᴇᴀᴅʏ`,
-        '╰─────────────┈⊷'
-    ].join('\n');
-}
-
-/* Forward context (Newsletter eken awa wage) */
-function forwardContext() {
-    const contextInfo = { forwardingScore: 999, isForwarded: true };
-    if (config.NEWSLETTER_ID) {
-        contextInfo.forwardedNewsletterMessageInfo = {
-            newsletterJid: config.NEWSLETTER_ID,
-            newsletterName: config.BOT_NAME,
-            serverMessageId: 1
-        };
-    }
-    return contextInfo;
-}
-
-/* Personal accounts walata interactive message render wenna me node eka ona (menu.js eken) */
-const BIZ_NODE = {
-    tag: 'biz',
-    attrs: {},
-    content: [{
-        tag: 'interactive',
-        attrs: { type: 'native_flow', v: '1' },
-        content: [{ tag: 'native_flow', attrs: { v: '9', name: 'mixed' } }]
-    }]
-};
-
-/* ------------------------------------------------------------------ */
-/*  Plugin                                                             */
-/* ------------------------------------------------------------------ */
 module.exports = {
     name: 'alive',
-    description: 'Check bot status',
-    category: 'general',
-    alias: ['status', 'online', 'bot'],
+    alias: ['status', 'online'],
 
-    async execute(sock, msg, args, text, ctx = {}) {
-        const jid = msg.key.remoteJid;
-        const prefix = ctx.prefix || config.PREFIX || '.';
-        const user = msg.pushName || (msg.key.participant || jid).split('@')[0] || 'User';
-        const ownerNum = String(config.OWNER_NUMBER).replace(/\D/g, '');
+    async execute(socket, msg, args, text, ctx) {
+        const { from, config } = ctx;
 
-        try { await sock.sendMessage(jid, { react: { text: '⚡', key: msg.key } }); } catch (e) {}
+        const start = Date.now();
 
-        const infoText = buildAlive(user, prefix);
-        const contextInfo = forwardContext();
+        const formatUptime = (seconds) => {
+            const d = Math.floor(seconds / 86400);
+            const h = Math.floor((seconds % 86400) / 3600);
+            const m = Math.floor((seconds % 3600) / 60);
+            const s = Math.floor(seconds % 60);
 
-        try {
-            // 1. Media eka prepare karanawa (menu.js eke wage)
-            const media = await prepareWAMessageMedia(
-                { image: { url: config.RCD_IMAGE_PATH } },
-                { upload: sock.waUploadToServer }
-            );
+            return `${d}d ${h}h ${m}m ${s}s`;
+        };
 
-            // 2. Contact Owner Button eka hadanawa (wa.me link eken chat eka open wenawa)
-            const buttons = [{
-                name: 'cta_url',
-                buttonParamsJson: JSON.stringify({
-                    display_text: '🐉 ᴏᴡɴᴇʀ',
-                    url: `https://wa.me/${ownerNum}`,
-                    merchant_url: `https://wa.me/${ownerNum}`
-                })
-            }];
+        const uptime = formatUptime(process.uptime());
 
-            // 3. Interactive Message eka construct karanawa
-            const content = generateWAMessageFromContent(
-                jid,
-                {
-                    viewOnceMessage: {
-                        message: {
-                            messageContextInfo: { deviceListMetadata: {}, deviceListMetadataVersion: 2 },
-                            interactiveMessage: {
-                                header: {
-                                    title: ALIVE_TITLE,
-                                    hasMediaAttachment: true,
-                                    imageMessage: media.imageMessage
-                                },
-                                body: { text: infoText },
-                                footer: { text: config.BOT_FOOTER || '© ᴘᴏᴡᴇʀᴇᴅ ʙʏ ɴᴏᴍᴏ ᴍɪɴɪ' },
-                                nativeFlowMessage: { buttons }
-                            }
-                        }
-                    }
-                },
-                { userJid: sock.user.id }
-            );
+        const memory = process.memoryUsage();
+        const ram = (memory.rss / 1024 / 1024).toFixed(2);
 
-            // 4. Send via Relay Message
-            await sock.relayMessage(jid, content.message, {
-                messageId: content.key.id,
-                additionalNodes: [BIZ_NODE]
-            });
+        const totalRAM = (os.totalmem() / 1024 / 1024 / 1024).toFixed(2);
 
-        } catch (err) {
-            console.error('Interactive alive failed, sending fallback:', err.message);
-            
-            // Fallback: Interactive fail unoth normal text + vCard yawanawa
-            const caption = `┌─ム ${ALIVE_TITLE}\n\n${infoText}\n\n> ${config.BOT_FOOTER}`;
+        const platform = os.platform();
+        const nodeVersion = process.version;
+
+        const time = moment()
+            .tz('Asia/Colombo')
+            .format('DD MMM YYYY | hh:mm:ss A');
+
+        const botName = config.BOT_NAME || 'QUEEN ZARA';
+        const footer = config.BOT_FOOTER || 'SIRIMATH DEV </>';
+
+        const ping = Date.now() - start;
+
+        const caption = `
+╭━━〔 👑 𝐐𝐔𝐄𝐄𝐍 𝐙𝐀𝐑𝐀 〕━━╮
+
+       ✨ 𝐈'𝐌 𝐀𝐋𝐈𝐕𝐄 𝐍𝐎𝐖 ✨
+
+╭───────────────
+│ 🟢 𝐒𝐭𝐚𝐭𝐮𝐬 : 𝐎𝐍𝐋𝐈𝐍𝐄
+│ 🤖 𝐁𝐨𝐭 : ${botName}
+│ ⚡ 𝐏𝐢𝐧𝐠 : ${ping} ms
+│ ⏱️ 𝐔𝐩𝐭𝐢𝐦𝐞 : ${uptime}
+╰───────────────
+
+╭━━〔 💻 𝐒𝐘𝐒𝐓𝐄𝐌 〕━━╮
+│ 🧠 𝐑𝐀𝐌 : ${ram} MB
+│ 💾 𝐓𝐨𝐭𝐚𝐥 : ${totalRAM} GB
+│ ⚙️ 𝐏𝐥𝐚𝐭𝐟𝐨𝐫𝐦 : ${platform}
+│ 📦 𝐍𝐨𝐝𝐞 : ${nodeVersion}
+╰────────────────
+
+╭━━〔 🕒 𝐋𝐎𝐂𝐀𝐋 𝐓𝐈𝐌𝐄 〕━━╮
+│ 🇱🇰 ${time}
+╰────────────────
+
+╭━━〔 👑 𝐃𝐄𝐕𝐄𝐋𝐎𝐏𝐄𝐑 〕━━╮
+│ 💎 𝐒𝐈𝐑𝐈𝐌𝐀𝐓𝐇 𝐃𝐄𝐕 </>
+│ 🦋 𝐐𝐔𝐄𝐄𝐍 𝐙𝐀𝐑𝐀
+╰────────────────
+
+       ♛ 𝐏𝐎𝐖𝐄𝐑𝐄𝐃 𝐁𝐘 𝐒𝐈𝐑𝐈𝐌𝐀𝐓𝐇 ♛
+
+> ${footer}
+`;
+
+        const logo = config.RCD_IMAGE_PATH;
+
+        if (logo) {
             try {
-                await sock.sendMessage(jid, { image: { url: config.RCD_IMAGE_PATH }, caption, contextInfo }, { quoted: msg });
-            } catch (e) {
-                await sock.sendMessage(jid, { text: caption, contextInfo }, { quoted: msg });
-            }
-
-            // Fallback VCard
-            const vcard = 'BEGIN:VCARD\n'
-                + 'VERSION:3.0\n'
-                + `FN:${config.BOT_NAME} Owner\n`
-                + `ORG:${config.BOT_NAME};\n`
-                + `TEL;type=CELL;type=VOICE;waid=${ownerNum}:+${ownerNum}\n`
-                + 'END:VCARD';
-            await sock.sendMessage(jid, { contacts: { displayName: `${config.BOT_NAME} Owner`, contacts: [{ vcard }] } }, { quoted: msg });
+                await socket.sendMessage(
+                    from,
+                    {
+                        image: { url: logo },
+                        caption
+                    },
+                    { quoted: msg }
+                );
+                return;
+            } catch (e) {}
         }
+
+        await socket.sendMessage(
+            from,
+            { text: caption },
+            { quoted: msg }
+        );
     }
 };
