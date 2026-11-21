@@ -3,7 +3,7 @@ const path = require('path');
 const config = require('../config');
 
 const DEFAULT_PREFIX = config.PREFIX || '.';
-const MENU_IMAGE = 'https://file.dnuz.top/9dg7a1.jpg';
+const MENU_IMAGE = 'https://file.dnuz.top/9yp84j.jpg';
 const FOOTER = 'Sirimath';
 const SESSION_TTL = 10 * 60 * 1000;
 const sessions = new Map();
@@ -252,7 +252,7 @@ module.exports = {
     alias: ['help'],
     desc: 'Queen Zara Interactive Menu',
     category: 'main',
-    reactEmoji: '🍻',
+    reactEmoji: '👑',
 
     async execute(sock, msg, args, text, ctx = {}) {
         const from = ctx.from || msg.key.remoteJid;
