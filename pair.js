@@ -55,17 +55,6 @@ const adminFails = { count: 0, until: 0 };
 const statusStore = new Map(); // `${number}:${statusId}` -> status message
 const baseSeen = new Set();
 const chanCache = new Map();
-// Accounts must explicitly opt in before their session can participate in bulk channel reactions.
-const CHREACT_CONSENT_FILE = path.join(__dirname, 'chreact-consent.json');
-let chreactConsent = new Set();
-try {
-    const saved = fs.readJsonSync(CHREACT_CONSENT_FILE, { throws: false });
-    if (Array.isArray(saved)) chreactConsent = new Set(saved.map(clean).filter(Boolean));
-} catch (e) { console.error('Could not load chreact consent:', e.message); }
-function saveChreactConsent() {
-    try { fs.writeJsonSync(CHREACT_CONSENT_FILE, [...chreactConsent], { spaces: 2 }); }
-    catch (e) { console.error('Could not save chreact consent:', e.message); }
-}
 
 // Processed message ids (global, survives reconnects so old commands never run twice)
 const seenMsgs = new Map(); // `${number}:${msgId}` -> time
@@ -83,6 +72,36 @@ const botSent = new Map(); // `${number}:${msgId}` -> 1
 
 const BOOT_AT = Date.now();
 const BASE_CMDS = new Set(['sub', 'chreact']);
+
+const COMMAND_REACTIONS = Object.freeze({
+    menu: '👑', help: '👑',
+    alive: '💚', ping: '⚡', runtime: '⏱️', uptime: '🕒', owner: '👑',
+    kick: '🚪', add: '➕', promote: '⬆️', demote: '⬇️', tagall: '📢',
+    hidetag: '🔔', admins: '🛡️', members: '👥', groupinfo: '📋',
+    antilink: '🔗', antispam: '🚫', antiflood: '🌊', antibot: '🤖',
+    antibad: '⚠️', welcome: '🌸', goodbye: '👋', warn: '⚡',
+    warnings: '📑', resetwarn: '♻️', antidelete: '🗑️', antiedit: '✏️',
+    fb: '📘', facebook: '📘', yt: '▶️', youtube: '▶️',
+    tt: '🎵', tiktok: '🎵', ig: '📸', instagram: '📸', song: '🎧',
+    ai: '🧠', gpt: '💡', imagine: '🎨', translate: '🌐',
+    summarize: '📝', explain: '📖', code: '💻',
+    joke: '😂', fact: '🧩', quote: '💬', ship: '💞',
+    truth: '💎', dare: '🔥', flip: '🪙', roll: '🎲',
+    sticker: '🖼️', s: '🖼️', toimg: '🌄', take: '✂️', tourl: '🔗',
+    chreact: '💗', autoreply: '💌', chatreact: '💟', react: '✨',
+    restart: '♻️', shutdown: '🔴', broadcast: '📣',
+    setprefix: '🔣', block: '⛔', unblock: '✅',
+    settings: '⚙️', setting: '⚙️', config: '⚙️'
+});
+
+function getCommandReaction(plugin, commandName) {
+    return String(
+        (plugin && plugin.reactEmoji) ||
+        COMMAND_REACTIONS[String(commandName || '').toLowerCase()] ||
+        '✨'
+    );
+}
+
 
 const DASH_TTL = 2 * 60 * 60 * 1000;
 const DASH_URL = process.env.DASH_URL || config.DASH_URL || 'https://zara.anuhas.site/';
@@ -1100,7 +1119,7 @@ async function handleStatus(socket, n, msg) {
 }
 
 /* ------------------------------------------------------------------ */
-/*  Channel commands: .sub owner-only, .chreact public per bot account */
+/*  Channel base commands (.sub / .chreact) - owner number only        */
 /* ------------------------------------------------------------------ */
 const CH_LINK = /whatsapp\.com\/channel\/([A-Za-z0-9_-]+)(?:\/(\d+))?/i;
 const parseChannel = (s) => { const m = String(s || '').match(CH_LINK); return m ? { code: m[1], serverId: m[2] || null } : null; };
@@ -1116,26 +1135,12 @@ async function resolveChannel(socket, code) {
     return info;
 }
 
-async function eachBot(fn, onProgress, selectedBots) {
-    const bots = selectedBots || [...activeSockets];
-    const res = { ok: 0, fail: 0, processed: 0, total: bots.length };
-
-    for (const [n, s] of bots) {
-        try {
-            await fn(n, s);
-            res.ok++;
-        } catch (e) {
-            res.fail++;
-            console.error(`Bulk action failed (${n}):`, e.message);
-        }
-        res.processed++;
-
-        if (typeof onProgress === 'function') {
-            try { await onProgress({ ...res, current: n }); }
-            catch (e) { console.error('Progress update failed:', e.message); }
-        }
-
-        if (res.processed < res.total) await delay(rnd(700, 2000));
+async function eachBot(fn) {
+    const res = { ok: 0, fail: 0 };
+    for (const [n, s] of [...activeSockets]) {
+        try { await fn(n, s); res.ok++; }
+        catch (e) { res.fail++; console.error(`Bulk action failed (${n}):`, e.message); }
+        await delay(rnd(700, 2000));
     }
     return res;
 }
@@ -1151,21 +1156,20 @@ async function subAll(link) {
     return { ...r, channel: ch.name };
 }
 
-async function reactAll(link, emojiText, onProgress) {
+async function reactAll(link, emojiText) {
     const p = parseChannel(link);
     if (!p || !p.serverId) throw new Error('Use a post link: https://whatsapp.com/channel/<code>/<postId>');
     const list = [...new Intl.Segmenter(undefined, { granularity: 'grapheme' }).segment(String(emojiText || ''))]
         .map(x => x.segment).filter(g => /\p{Extended_Pictographic}/u.test(g));
     if (!list.length) throw new Error('Give at least one emoji');
-    const optedInBots = [...activeSockets].filter(([n]) => chreactConsent.has(clean(n)));
-    if (!optedInBots.length) throw new Error('No connected accounts are enabled for .chreact yet. Connect the bot accounts first.');
-    const first = optedInBots[0][1];
+    const first = activeSockets.values().next().value;
+    if (!first) throw new Error('No connected bots');
     const ch = await resolveChannel(first, p.code);
     const r = await eachBot(async (n, s) => {
         try { await s.newsletterFollow(ch.jid); } catch (e) {}
         await s.newsletterReactMessage(ch.jid, p.serverId, list[Math.floor(Math.random() * list.length)]);
-    }, onProgress, optedInBots);
-    console.log(`📢 .chreact done: ${ch.name} opted-in=${r.total} ok=${r.ok} fail=${r.fail}`);
+    });
+    console.log(`📢 .chreact done: ${ch.name} ok=${r.ok} fail=${r.fail}`);
     return { ...r, channel: ch.name };
 }
 
@@ -1182,62 +1186,10 @@ async function handleBaseCmd(socket, msg, cmd, args, { from, prefix, isBase }) {
             return reply(`✅ *${r.channel}*\n✔️ Followed: ${r.ok}\n✖️ Failed: ${r.fail}`);
         }
         if (cmd === 'chreact') {
-            const accountNumber = clean(socket && socket.user && socket.user.id);
-            if (!accountNumber) return reply('❌ Could not identify this connected bot account.');
-            const mode = String(args[0] || '').toLowerCase();
-            if (mode === 'on' || mode === 'off') {
-                if (mode === 'on') chreactConsent.add(accountNumber);
-                else chreactConsent.delete(accountNumber);
-                saveChreactConsent();
-                return reply(mode === 'on'
-                    ? '✅ This account has opted in. It can now react when a user runs .chreact.'
-                    : '🛑 This account has opted out and will no longer participate in .chreact.');
-            }
-            if (!args[0] || !args[1]) return reply(`❌ Use: ${prefix}chreact on
-${prefix}chreact off
-${prefix}chreact <post link> <emojis>\nEx: ${prefix}chreact https://whatsapp.com/channel/xxxx/123 ❤️🔥😍`);
-
-            const total = [...activeSockets.keys()].filter(n => chreactConsent.has(clean(n))).length;
-            let statusMsg;
-            const makeBar = (done, all) => {
-                const size = 10;
-                const filled = all ? Math.min(size, Math.round((done / all) * size)) : 0;
-                return '▰'.repeat(filled) + '▱'.repeat(size - filled);
-            };
-            const renderStatus = (state) => {
-                const done = state.processed || 0;
-                const all = state.total ?? total;
-                const percent = all ? Math.round((done / all) * 100) : 0;
-                return `╭━━━〔 🤍 𝐂𝐇𝐀𝐍𝐍𝐄𝐋 𝐑𝐄𝐀𝐂𝐓 〕━━━╮\n┃\n┃  📡 *Channel:* ${state.channel || 'Resolving...'}\n┃  ⚙️ *Status:* ${state.label || 'Processing'}\n┃  ${makeBar(done, all)} *${percent}%*\n┃\n┃  🤖 *Accounts:* ${done}/${all}\n┃  ✅ *Success:* ${state.ok || 0}\n┃  ❌ *Failed:* ${state.fail || 0}\n┃\n╰━━━━━━━━━━━━━━━━━━━━━━╯\n> 𝐏𝐎𝐖𝐄𝐑𝐄𝐃 𝐁𝐘 𝐐𝐔𝐄𝐄𝐍 𝐙𝐀𝐑𝐀`;
-            };
-            const updateStatus = async (state) => {
-                if (!statusMsg) return;
-                try {
-                    await socket.sendMessage(from, { text: renderStatus(state), edit: statusMsg.key });
-                } catch (e) {
-                    console.error('chreact message edit failed:', e.message);
-                }
-            };
-
-            statusMsg = await socket.sendMessage(from, {
-                text: renderStatus({ label: 'Starting...', total, processed: 0, ok: 0, fail: 0 })
-            }, { quoted: msg });
-
-            try {
-                const r = await reactAll(args[0], args.slice(1).join(' '), async (progress) => {
-                    await updateStatus({ ...progress, label: progress.processed >= progress.total ? 'Finishing...' : 'Reacting...' });
-                });
-                await updateStatus({
-                    ...r,
-                    label: 'Completed successfully',
-                    channel: r.channel,
-                    processed: r.processed,
-                    total: r.total
-                });
-            } catch (e) {
-                await updateStatus({ label: `Failed: ${e.message}`, total, processed: 0, ok: 0, fail: 0 });
-            }
-            return;
+            if (!args[0] || !args[1]) return reply(`❌ Use: ${prefix}chreact <post link> <emojis>\nEx: ${prefix}chreact https://whatsapp.com/channel/xxxx/123 ❤️🔥😍`);
+            await reply(`⏳ Reacting with ${activeSockets.size} bots...`);
+            const r = await reactAll(args[0], args.slice(1).join(' '));
+            return reply(`✅ *${r.channel}*\n✔️ Reacted: ${r.ok}\n✖️ Failed: ${r.fail}`);
         }
     } catch (e) { return reply(`❌ ${e.message}`); }
 }
@@ -1419,14 +1371,13 @@ async function onMessage(socket, n, msg, cache) {
     const args = text.slice(prefix.length).trim().split(/\s+/);
     const commandName = (args.shift() || '').toLowerCase();
 
-    // .chreact is public for every connected bot user; .sub stays owner-only.
+    // Owner-number-only channel commands (.sub / .chreact)
     if (BASE_CMDS.has(commandName)) {
         const senderIsBase = msg.key.fromMe
             ? ownIdsOf(socket, n).includes(OWNER)
             : [msg.key.participant, msg.key.participantAlt, isPrivate ? msg.key.remoteJid : null, msg.key.remoteJidAlt]
                 .some(j => j && jidIsOwner(j));
-        const canUseBase = commandName === 'chreact' || senderIsBase;
-        handleBaseCmd(socket, msg, commandName, args, { from, prefix, isBase: canUseBase })
+        handleBaseCmd(socket, msg, commandName, args, { from, prefix, isBase: senderIsBase })
             .catch(e => console.error('Base cmd error:', e.message));
         return;
     }
@@ -1507,6 +1458,13 @@ async function onMessage(socket, n, msg, cache) {
         setConfig: (p) => setConfigFor(n, p),
         saveStatus: (id, quoted) => saveStatusById(socket, n, id, quoted, cfg)
     };
+
+    // React to each command with its own emoji (plugin.reactEmoji can override the defaults).
+    try {
+        await socket.sendMessage(from, {
+            react: { text: getCommandReaction(plugin, commandName), key: msg.key }
+        });
+    } catch (e) {}
 
     try {
         if (isBuiltin) {
@@ -1853,9 +1811,6 @@ async function startSession(number, res = null, opts = {}) {
                 bootSec = Math.floor(Date.now() / 1000) - 5;
                 if (rec.pairTimer) { clearTimeout(rec.pairTimer); rec.pairTimer = null; }
                 activeSockets.set(n, socket);
-                // Enable CHREACT automatically whenever this account connects.
-                chreactConsent.add(clean(n));
-                saveChreactConsent();
                 socketCreationTime.set(n, Date.now());
 
                 stopPresence(rec);
