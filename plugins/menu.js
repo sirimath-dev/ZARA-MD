@@ -3,7 +3,6 @@ const path = require('path');
 const config = require('../config');
 
 const DEFAULT_PREFIX = config.PREFIX || '.';
-const DEFAULT_LOGO = config.RCD_IMAGE_PATH || 'https://files.catbox.moe/29hxc2.jpg';
 const MENU_IMAGE = 'https://file.dnuz.top/9yp84j.jpg';
 const FOOTER = 'Sirimath';
 const SESSION_TTL = 10 * 60 * 1000;
